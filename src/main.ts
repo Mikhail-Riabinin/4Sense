@@ -1499,6 +1499,8 @@ class ChatModal extends Modal {
   private streamingTypingTimer: number | null;
   private streamingTypingProgress: number;
   private streamingFinalizeTarget: { body: HTMLElement; text: string } | null;
+  private viewportTarget: VisualViewport | null;
+  private viewportHandler: EventListener | null;
 
   constructor(
     app: App,
@@ -1545,6 +1547,8 @@ class ChatModal extends Modal {
     this.streamingTypingTimer = null;
     this.streamingTypingProgress = 0;
     this.streamingFinalizeTarget = null;
+    this.viewportTarget = null;
+    this.viewportHandler = null;
   }
 
   onOpen(): void {
@@ -1561,11 +1565,20 @@ class ChatModal extends Modal {
       contentEl.addClass("folder-summary-chat--quiet");
     }
 
-    const header = contentEl.createEl("h3", { text: "Chat with assistant" });
+    const headerRow = contentEl.createEl("div");
+    headerRow.addClass("folder-summary-chat__header");
+    const header = headerRow.createEl("h3", { text: "Chat with assistant" });
     header.addClass("folder-summary-chat__title");
+    const closeButton = headerRow.createEl("button");
+    closeButton.addClass("folder-summary-chat__close");
+    closeButton.setAttr("aria-label", "Close chat");
+    const closeGlyph = closeButton.createEl("span", { text: "×" });
+    closeGlyph.addClass("folder-summary-chat__close-glyph");
+    closeButton.onclick = () => this.close();
 
     const output = contentEl.createEl("div");
     output.addClass("folder-summary-chat__output");
+    output.tabIndex = -1;
 
     for (const message of this.messages) {
       if (message.role === "user" || message.role === "assistant") {
@@ -1576,6 +1589,39 @@ class ChatModal extends Modal {
     const input = contentEl.createEl("textarea");
     input.addClass("folder-summary-chat__input");
     input.placeholder = "Ask a question...";
+    const keepInputVisible = () => {
+      window.setTimeout(() => {
+        input.scrollIntoView({ block: "nearest", behavior: "auto" });
+      }, 80);
+    };
+    const syncViewportHeight = () => {
+      const viewportHeight =
+        typeof window.visualViewport?.height === "number"
+          ? window.visualViewport.height
+          : window.innerHeight;
+      this.modalEl.style.setProperty(
+        "--folder-summary-chat-vh",
+        `${Math.max(320, Math.round(viewportHeight))}px`
+      );
+    };
+    syncViewportHeight();
+    const viewport = window.visualViewport;
+    if (viewport) {
+      const onViewportChange: EventListener = () => {
+        syncViewportHeight();
+        if (document.activeElement === input) {
+          keepInputVisible();
+        }
+      };
+      viewport.addEventListener("resize", onViewportChange);
+      viewport.addEventListener("scroll", onViewportChange);
+      this.viewportTarget = viewport;
+      this.viewportHandler = onViewportChange;
+    }
+    input.addEventListener("focus", () => {
+      syncViewportHeight();
+      keepInputVisible();
+    });
 
     const actionButton = contentEl.createEl("button", { text: "Send" });
     actionButton.addClass("folder-summary-chat__send");
@@ -1712,9 +1758,8 @@ class ChatModal extends Modal {
     checkbox.checked = true;
     checkbox.addClass("folder-summary-chat__summary-checkbox");
     summaryToggle.createEl("span").addClass("folder-summary-chat__summary-slider");
-    summaryToggle.createEl("span", {
-      text: "Добавить summary в контекст"
-    });
+    const summaryLabel = summaryToggle.createEl("span", { text: "Use summary" });
+    summaryLabel.addClass("folder-summary-chat__summary-toggle-label");
     checkbox.addEventListener("change", () => {
       this.useSummary = checkbox.checked;
     });
@@ -1766,12 +1811,24 @@ class ChatModal extends Modal {
         closeSummarySheet();
       }
     });
+    window.setTimeout(() => {
+      if (document.activeElement === closeButton) {
+        output.focus({ preventScroll: true });
+      }
+    }, 0);
   }
 
   onClose(): void {
     this.currentAbort?.abort();
     this.currentAbort = null;
     this.resetStreamingState();
+    if (this.viewportTarget && this.viewportHandler) {
+      this.viewportTarget.removeEventListener("resize", this.viewportHandler);
+      this.viewportTarget.removeEventListener("scroll", this.viewportHandler);
+    }
+    this.viewportTarget = null;
+    this.viewportHandler = null;
+    this.modalEl.style.removeProperty("--folder-summary-chat-vh");
     this.modalEl.removeClass("folder-summary-chat-modal");
     this.modalEl.removeClass("folder-summary-chat-modal--glass");
     this.modalEl.removeClass("folder-summary-chat-modal--quiet");

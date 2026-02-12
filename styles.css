@@ -18,6 +18,10 @@
   background: transparent;
 }
 
+.folder-summary-chat-modal .modal-close-button {
+  display: none;
+}
+
 .folder-summary-chat-modal--glass {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08)),
@@ -85,10 +89,71 @@
 }
 
 .folder-summary-chat__title {
-  margin: 2px 2px 0;
+  margin: 2px 2px 0 0;
   font-size: 20px;
   font-weight: 650;
   letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.folder-summary-chat__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.folder-summary-chat__close {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+  flex: 0 0 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(44, 49, 58, 0.9);
+  color: #fff;
+  font-size: 12px;
+  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+}
+
+.folder-summary-chat--glass .folder-summary-chat__close {
+  background: rgba(44, 49, 58, 0.86);
+}
+
+.folder-summary-chat--quiet .folder-summary-chat__close {
+  background: rgba(44, 49, 58, 0.9);
+}
+
+.folder-summary-chat__close-glyph {
+  display: block;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  transform: translateY(-1px);
+  pointer-events: none;
+}
+
+.folder-summary-chat__close:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.folder-summary-chat__close:focus-visible {
+  outline: none !important;
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.folder-summary-chat__output:focus {
+  outline: none;
 }
 
 .folder-summary-chat__summary {
@@ -104,6 +169,10 @@
   color: var(--text-muted);
   align-self: flex-start;
   min-height: 40px;
+}
+
+.folder-summary-chat__summary-toggle-label {
+  white-space: nowrap;
 }
 
 .folder-summary-chat__summary-checkbox {
@@ -693,13 +762,16 @@
   .folder-summary-chat-modal {
     width: 100vw !important;
     max-width: 100vw !important;
-    height: 100vh !important;
-    max-height: 100vh !important;
+    height: var(--folder-summary-chat-vh, 100dvh) !important;
+    max-height: var(--folder-summary-chat-vh, 100dvh) !important;
     border-radius: 0 !important;
   }
 
   .folder-summary-chat-modal .modal-content {
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    padding:
+      calc(8px + env(safe-area-inset-top))
+      8px
+      calc(8px + env(safe-area-inset-bottom));
   }
 
   .folder-summary-chat {
@@ -712,8 +784,18 @@
     font-size: 18px;
   }
 
+  .folder-summary-chat__close {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+    flex: 0 0 24px;
+  }
+
   .folder-summary-chat__output {
-    min-height: 200px;
+    min-height: 120px;
   }
 
   .folder-summary-chat__message {
@@ -725,7 +807,8 @@
   }
 
   .folder-summary-chat__input {
-    min-height: 84px;
+    min-height: 72px;
+    height: 5.2em;
   }
 
   .folder-summary-chat__summary-sheet {

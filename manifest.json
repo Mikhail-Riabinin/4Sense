@@ -1,7 +1,7 @@
 {
   "id": "4sense",
   "name": "4Sense",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.4.0",
   "description": "Summarize a folder via API and chat with the summary in context.",
   "author": "Riabinin Mikhail",
