@@ -1536,6 +1536,8 @@ class ChatModal extends Modal {
   private streamingFinalizeTarget: { body: HTMLElement; text: string } | null;
   private viewportTarget: VisualViewport | null;
   private viewportHandler: EventListener | null;
+  private viewportMeasureRaf: number | null;
+  private viewportMeasureTimeout: number | null;
 
   constructor(
     app: App,
@@ -1584,6 +1586,8 @@ class ChatModal extends Modal {
     this.streamingFinalizeTarget = null;
     this.viewportTarget = null;
     this.viewportHandler = null;
+    this.viewportMeasureRaf = null;
+    this.viewportMeasureTimeout = null;
   }
 
   onOpen(): void {
@@ -1622,64 +1626,110 @@ class ChatModal extends Modal {
       }
     }
 
-    const input = contentEl.createEl("textarea");
+    const composer = contentEl.createEl("div");
+    composer.addClass("folder-summary-chat__composer");
+    const input = composer.createEl("textarea");
     input.addClass("folder-summary-chat__input");
     input.placeholder = "Ask a question...";
+    let actionsRow: HTMLElement | null = null;
+    const updateComposerMetrics = (
+      keyboardInset: number,
+      viewportBottom: number
+    ): void => {
+      if (!actionsRow) {
+        return;
+      }
+      const composerRect = composer.getBoundingClientRect();
+      const composerHeight = Math.max(0, Math.round(composerRect.height));
+      contentEl.style.setProperty("--folder-summary-chat-composer-height", `${composerHeight}px`);
+      const scrollPaddingBottom = Math.max(24, composerHeight + 16 + keyboardInset);
+      output.style.setProperty("scroll-padding-bottom", `${scrollPaddingBottom}px`);
+      const inputRect = input.getBoundingClientRect();
+      const forcedLift = Math.max(0, Math.round(inputRect.bottom - (viewportBottom - 8)));
+      contentEl.style.setProperty("--folder-summary-chat-keyboard-lift", `${forcedLift}px`);
+      contentEl.classList.toggle("folder-summary-chat--keyboard-force-lift", forcedLift > 2);
+    };
     const keepInputVisible = () => {
       globalThis.setTimeout(() => {
         input.scrollIntoView({ block: "end", behavior: "auto" });
       }, 80);
     };
-    const syncViewportMetrics = () => {
+    const updateViewportMetrics = () => {
+      const viewport = globalThis.visualViewport;
       const viewportHeight =
-        typeof globalThis.visualViewport?.height === "number"
-          ? globalThis.visualViewport.height
+        typeof viewport?.height === "number"
+          ? viewport.height
           : globalThis.innerHeight;
+      const viewportOffsetTop =
+        typeof viewport?.offsetTop === "number" ? viewport.offsetTop : 0;
+      const viewportBottom = viewportOffsetTop + viewportHeight;
       this.modalEl.style.setProperty(
         "--folder-summary-chat-vh",
         `${Math.max(320, Math.round(viewportHeight))}px`
       );
-      const viewportInset =
-        typeof globalThis.visualViewport?.height === "number" &&
-        typeof globalThis.visualViewport?.offsetTop === "number"
-          ? Math.max(
-              0,
-              Math.round(
-                globalThis.innerHeight -
-                  (globalThis.visualViewport.height + globalThis.visualViewport.offsetTop)
-              )
-            )
-          : 0;
+      const viewportInsetFromOffset = Math.max(
+        0,
+        Math.round(globalThis.innerHeight - (viewportHeight + viewportOffsetTop))
+      );
+      const viewportInsetFromHeight = Math.max(
+        0,
+        Math.round(globalThis.innerHeight - viewportHeight)
+      );
+      const viewportInset = Math.max(viewportInsetFromOffset, viewportInsetFromHeight);
       this.modalEl.style.setProperty(
         "--folder-summary-chat-keyboard-inset",
         `${viewportInset}px`
       );
       contentEl.classList.toggle("folder-summary-chat--keyboard-open", viewportInset > 20);
+      updateComposerMetrics(viewportInset, viewportBottom);
     };
-    syncViewportMetrics();
-    const viewport = globalThis.visualViewport;
-    if (viewport) {
+    const scheduleViewportMetrics = () => {
+      updateViewportMetrics();
+      if (
+        this.viewportMeasureRaf !== null &&
+        typeof globalThis.cancelAnimationFrame === "function"
+      ) {
+        globalThis.cancelAnimationFrame(this.viewportMeasureRaf);
+      }
+      this.viewportMeasureRaf =
+        typeof globalThis.requestAnimationFrame === "function"
+          ? globalThis.requestAnimationFrame(() => {
+              this.viewportMeasureRaf = null;
+              updateViewportMetrics();
+            })
+          : null;
+      if (this.viewportMeasureTimeout !== null) {
+        globalThis.clearTimeout(this.viewportMeasureTimeout);
+      }
+      this.viewportMeasureTimeout = globalThis.setTimeout(() => {
+        this.viewportMeasureTimeout = null;
+        updateViewportMetrics();
+      }, 140);
+    };
+    scheduleViewportMetrics();
+    const viewportTarget = globalThis.visualViewport;
+    if (viewportTarget) {
       const onViewportChange: EventListener = () => {
-        syncViewportMetrics();
+        scheduleViewportMetrics();
         if (this.contentEl.ownerDocument.activeElement === input) {
           keepInputVisible();
         }
       };
-      viewport.addEventListener("resize", onViewportChange);
-      viewport.addEventListener("scroll", onViewportChange);
-      this.viewportTarget = viewport;
+      viewportTarget.addEventListener("resize", onViewportChange);
+      viewportTarget.addEventListener("scroll", onViewportChange);
+      this.viewportTarget = viewportTarget;
       this.viewportHandler = onViewportChange;
     }
     input.addEventListener("focus", () => {
-      syncViewportMetrics();
+      scheduleViewportMetrics();
       keepInputVisible();
     });
     input.addEventListener("blur", () => {
-      globalThis.setTimeout(syncViewportMetrics, 120);
+      scheduleViewportMetrics();
     });
     input.addEventListener("input", keepInputVisible);
 
-    const actionButton = contentEl.createEl("button", { text: "Send" });
+    const actionButton = composer.createEl("button", { text: "Send" });
     actionButton.addClass("folder-summary-chat__send");
 
     const setWaiting = (waiting: boolean) => {
@@ -1800,7 +1850,7 @@ class ChatModal extends Modal {
       }
     });
 
-    const actionsRow = contentEl.createEl("div");
+    actionsRow = composer.createEl("div");
     actionsRow.addClass("folder-summary-chat__actions");
     actionsRow.appendChild(actionButton);
 
@@ -1819,6 +1869,7 @@ class ChatModal extends Modal {
     checkbox.addEventListener("change", () => {
       this.useSummary = checkbox.checked;
     });
+    scheduleViewportMetrics();
 
     const summarySheet = contentEl.createEl("div");
     summarySheet.addClass("folder-summary-chat__summary-sheet");
@@ -1884,14 +1935,28 @@ class ChatModal extends Modal {
     }
     this.viewportTarget = null;
     this.viewportHandler = null;
+    if (
+      this.viewportMeasureRaf !== null &&
+      typeof globalThis.cancelAnimationFrame === "function"
+    ) {
+      globalThis.cancelAnimationFrame(this.viewportMeasureRaf);
+    }
+    if (this.viewportMeasureTimeout !== null) {
+      globalThis.clearTimeout(this.viewportMeasureTimeout);
+    }
+    this.viewportMeasureRaf = null;
+    this.viewportMeasureTimeout = null;
     this.modalEl.style.removeProperty("--folder-summary-chat-vh");
     this.modalEl.style.removeProperty("--folder-summary-chat-keyboard-inset");
+    this.contentEl.style.removeProperty("--folder-summary-chat-keyboard-lift");
+    this.contentEl.style.removeProperty("--folder-summary-chat-composer-height");
     this.modalEl.removeClass("folder-summary-chat-modal");
     this.modalEl.removeClass("folder-summary-chat-modal--glass");
     this.modalEl.removeClass("folder-summary-chat-modal--quiet");
     this.contentEl.removeClass("folder-summary-chat--glass");
     this.contentEl.removeClass("folder-summary-chat--quiet");
     this.contentEl.removeClass("folder-summary-chat--keyboard-open");
+    this.contentEl.removeClass("folder-summary-chat--keyboard-force-lift");
     this.contentEl.empty();
   }
 
