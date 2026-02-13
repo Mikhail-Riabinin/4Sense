@@ -10,6 +10,7 @@ import {
   Plugin,
   PluginSettingTab,
   requestUrl,
+  setIcon,
   Setting,
   TAbstractFile,
   TFile,
@@ -117,7 +118,10 @@ export default class FolderSummaryPlugin extends Plugin {
     this.addCommand({
       id: "summarize-folder-select",
       name: "Summarize folder (select)",
-      callback: () => this.openFolderSelectModal(folder => this.summarizeFolder(folder))
+      callback: () =>
+        this.openFolderSelectModal(folder => {
+          void this.summarizeFolder(folder);
+        })
     });
 
     this.addCommand({
@@ -155,8 +159,10 @@ export default class FolderSummaryPlugin extends Plugin {
   }
 
   private registerUiActions(): void {
-    this.addRibbonIcon("sparkles", "Chat with assistant", () => {
-      this.openFolderSelectModal(selected => this.openChatForFolder(selected));
+    this.addRibbonIcon("sparkles", "Chat with assistant 4sense", () => {
+      this.openFolderSelectModal(selected => {
+        void this.openChatForFolder(selected);
+      });
     });
 
     this.registerEvent(
@@ -167,7 +173,7 @@ export default class FolderSummaryPlugin extends Plugin {
         }
         menu.addItem(item =>
           item
-            .setTitle("4Sense: Chat with assistant")
+            .setTitle("Chat with assistant 4sense")
             .setIcon("sparkles")
             .onClick(() => this.openChatForFolder(folder))
         );
@@ -183,7 +189,7 @@ export default class FolderSummaryPlugin extends Plugin {
         }
         menu.addItem(item =>
           item
-            .setTitle("4Sense: Chat with assistant")
+            .setTitle("Chat with assistant 4sense")
             .setIcon("sparkles")
             .onClick(() => this.openChatForFolder(folder))
         );
@@ -582,7 +588,7 @@ export default class FolderSummaryPlugin extends Plugin {
         if (signal) {
           signal.removeEventListener("abort", onAbort);
         }
-        window.clearTimeout(openTimeout);
+        globalThis.clearTimeout(openTimeout);
       };
 
       const resolveOnce = (result: ChatApiResponse) => {
@@ -695,7 +701,7 @@ export default class FolderSummaryPlugin extends Plugin {
         }
       };
 
-      const openTimeout = window.setTimeout(() => {
+      const openTimeout = globalThis.setTimeout(() => {
         try {
           socket.close();
         } catch {
@@ -713,7 +719,7 @@ export default class FolderSummaryPlugin extends Plugin {
       }
 
       socket.onopen = () => {
-        window.clearTimeout(openTimeout);
+        globalThis.clearTimeout(openTimeout);
         socket.send(payload);
       };
 
@@ -808,7 +814,10 @@ export default class FolderSummaryPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const saved = (await this.loadData()) as unknown;
+    const persisted =
+      saved && typeof saved === "object" ? (saved as Partial<FolderSummarySettings>) : {};
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, persisted);
   }
 
   async saveSettings(): Promise<void> {
@@ -886,7 +895,7 @@ export default class FolderSummaryPlugin extends Plugin {
     }
     try {
       return JSON.parse(response.text);
-    } catch (error) {
+    } catch {
       throw new Error("API returned non-JSON response.");
     }
   }
@@ -960,7 +969,25 @@ export default class FolderSummaryPlugin extends Plugin {
     }
     try {
       const content = await this.app.vault.read(file);
-      return JSON.parse(content);
+      const parsed = JSON.parse(content) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+      const files = (parsed as { files?: unknown }).files;
+      if (!Array.isArray(files)) {
+        return null;
+      }
+      const validFiles = files.filter(
+        (entry): entry is { path: string; mtime: number } =>
+          Boolean(entry) &&
+          typeof entry === "object" &&
+          typeof (entry as { path?: unknown }).path === "string" &&
+          typeof (entry as { mtime?: unknown }).mtime === "number"
+      );
+      if (validFiles.length !== files.length) {
+        return null;
+      }
+      return { files: validFiles };
     } catch {
       return null;
     }
@@ -1239,7 +1266,15 @@ export default class FolderSummaryPlugin extends Plugin {
     }
     try {
       const content = await this.app.vault.read(file);
-      return JSON.parse(content);
+      const parsed = JSON.parse(content) as unknown;
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        typeof (parsed as { activeLogPath?: unknown }).activeLogPath === "string"
+      ) {
+        return { activeLogPath: (parsed as { activeLogPath: string }).activeLogPath };
+      }
+      return null;
     } catch {
       return null;
     }
@@ -1316,7 +1351,7 @@ export default class FolderSummaryPlugin extends Plugin {
           await this.app.vault.createBinary(targetPath, buffer);
         }
         onStatus(path, "готово");
-      } catch (error) {
+      } catch {
         onStatus(path, "ошибка");
       }
     }
@@ -1567,13 +1602,14 @@ class ChatModal extends Modal {
 
     const headerRow = contentEl.createEl("div");
     headerRow.addClass("folder-summary-chat__header");
-    const header = headerRow.createEl("h3", { text: "Chat with assistant" });
+    const header = headerRow.createEl("h3", { text: "Chat with assistant 4sense" });
     header.addClass("folder-summary-chat__title");
     const closeButton = headerRow.createEl("button");
     closeButton.addClass("folder-summary-chat__close");
+    closeButton.addClass("clickable-icon");
+    closeButton.addClass("mod-close");
     closeButton.setAttr("aria-label", "Close chat");
-    const closeGlyph = closeButton.createEl("span", { text: "×" });
-    closeGlyph.addClass("folder-summary-chat__close-glyph");
+    setIcon(closeButton, "x");
     closeButton.onclick = () => this.close();
 
     const output = contentEl.createEl("div");
@@ -1590,26 +1626,26 @@ class ChatModal extends Modal {
     input.addClass("folder-summary-chat__input");
     input.placeholder = "Ask a question...";
     const keepInputVisible = () => {
-      window.setTimeout(() => {
-        input.scrollIntoView({ block: "nearest", behavior: "auto" });
+      globalThis.setTimeout(() => {
+        input.scrollIntoView({ block: "end", behavior: "auto" });
       }, 80);
     };
     const syncViewportHeight = () => {
       const viewportHeight =
-        typeof window.visualViewport?.height === "number"
-          ? window.visualViewport.height
-          : window.innerHeight;
+        typeof globalThis.visualViewport?.height === "number"
+          ? globalThis.visualViewport.height
+          : globalThis.innerHeight;
       this.modalEl.style.setProperty(
         "--folder-summary-chat-vh",
         `${Math.max(320, Math.round(viewportHeight))}px`
       );
     };
     syncViewportHeight();
-    const viewport = window.visualViewport;
+    const viewport = globalThis.visualViewport;
     if (viewport) {
       const onViewportChange: EventListener = () => {
         syncViewportHeight();
-        if (document.activeElement === input) {
+        if (this.contentEl.ownerDocument.activeElement === input) {
           keepInputVisible();
         }
       };
@@ -1622,6 +1658,7 @@ class ChatModal extends Modal {
       syncViewportHeight();
       keepInputVisible();
     });
+    input.addEventListener("input", keepInputVisible);
 
     const actionButton = contentEl.createEl("button", { text: "Send" });
     actionButton.addClass("folder-summary-chat__send");
@@ -1811,8 +1848,8 @@ class ChatModal extends Modal {
         closeSummarySheet();
       }
     });
-    window.setTimeout(() => {
-      if (document.activeElement === closeButton) {
+    globalThis.setTimeout(() => {
+      if (this.contentEl.ownerDocument.activeElement === closeButton) {
         output.focus({ preventScroll: true });
       }
     }, 0);
@@ -1920,7 +1957,7 @@ class ChatModal extends Modal {
     }
     this.streamingRenderText = text;
     if (this.streamingTypingTimer === null) {
-      this.streamingTypingTimer = window.setInterval(
+      this.streamingTypingTimer = globalThis.setInterval(
         () => this.tickStreamingTyping(),
         STREAM_TYPING_TICK_MS
       );
@@ -1929,7 +1966,7 @@ class ChatModal extends Modal {
 
   private stopStreamingTyping(): void {
     if (this.streamingTypingTimer !== null) {
-      window.clearInterval(this.streamingTypingTimer);
+      globalThis.clearInterval(this.streamingTypingTimer);
       this.streamingTypingTimer = null;
     }
     this.streamingTypingProgress = 0;
@@ -2078,9 +2115,9 @@ class FolderSummarySettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("API key")
       .setDesc("API key used for authentication.")
-      .addText(text =>
+          .addText(text =>
         text
-          .setPlaceholder("sk-...")
+          .setPlaceholder("API key")
           .setValue(this.plugin.settings.apiKey)
           .onChange(async value => {
             this.plugin.settings.apiKey = value.trim();
@@ -2146,9 +2183,9 @@ class FolderSummarySettingTab extends PluginSettingTab {
       .setDesc("Visual style for the chat modal.")
       .addDropdown(dropdown =>
         dropdown
-          .addOption("glass", "iOS Glass")
-          .addOption("quiet", "iOS Calm")
-          .addOption("classic", "iOS Classic")
+          .addOption("glass", "iOS glass")
+          .addOption("quiet", "iOS calm")
+          .addOption("classic", "iOS classic")
           .setValue(this.plugin.settings.chatTheme)
           .onChange(async value => {
             this.plugin.settings.chatTheme =
@@ -2218,5 +2255,8 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const chunk = bytes.subarray(i, i + chunkSize);
     binary += String.fromCharCode(...chunk);
   }
-  return btoa(binary);
+  if (typeof globalThis.btoa !== "function") {
+    throw new Error("btoa is not available in this environment.");
+  }
+  return globalThis.btoa(binary);
 }

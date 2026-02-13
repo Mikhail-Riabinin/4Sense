@@ -1,14 +1,18 @@
 {
   "name": "4sense",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs production",
-    "dev": "node esbuild.config.mjs"
+    "dev": "node esbuild.config.mjs",
+    "lint": "eslint \"src/**/*.ts\""
   },
   "devDependencies": {
+    "@typescript-eslint/parser": "^8.55.0",
     "esbuild": "^0.23.1",
+    "eslint": "^9.39.2",
+    "eslint-plugin-obsidianmd": "^0.1.9",
     "obsidian": "^1.6.7",
     "typescript": "^5.5.4"
   }
