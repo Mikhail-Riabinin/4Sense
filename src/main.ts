@@ -1630,7 +1630,7 @@ class ChatModal extends Modal {
         input.scrollIntoView({ block: "end", behavior: "auto" });
       }, 80);
     };
-    const syncViewportHeight = () => {
+    const syncViewportMetrics = () => {
       const viewportHeight =
         typeof globalThis.visualViewport?.height === "number"
           ? globalThis.visualViewport.height
@@ -1639,12 +1639,28 @@ class ChatModal extends Modal {
         "--folder-summary-chat-vh",
         `${Math.max(320, Math.round(viewportHeight))}px`
       );
+      const viewportInset =
+        typeof globalThis.visualViewport?.height === "number" &&
+        typeof globalThis.visualViewport?.offsetTop === "number"
+          ? Math.max(
+              0,
+              Math.round(
+                globalThis.innerHeight -
+                  (globalThis.visualViewport.height + globalThis.visualViewport.offsetTop)
+              )
+            )
+          : 0;
+      this.modalEl.style.setProperty(
+        "--folder-summary-chat-keyboard-inset",
+        `${viewportInset}px`
+      );
+      contentEl.classList.toggle("folder-summary-chat--keyboard-open", viewportInset > 20);
     };
-    syncViewportHeight();
+    syncViewportMetrics();
     const viewport = globalThis.visualViewport;
     if (viewport) {
       const onViewportChange: EventListener = () => {
-        syncViewportHeight();
+        syncViewportMetrics();
         if (this.contentEl.ownerDocument.activeElement === input) {
           keepInputVisible();
         }
@@ -1655,8 +1671,11 @@ class ChatModal extends Modal {
       this.viewportHandler = onViewportChange;
     }
     input.addEventListener("focus", () => {
-      syncViewportHeight();
+      syncViewportMetrics();
       keepInputVisible();
+    });
+    input.addEventListener("blur", () => {
+      globalThis.setTimeout(syncViewportMetrics, 120);
     });
     input.addEventListener("input", keepInputVisible);
 
@@ -1866,11 +1885,13 @@ class ChatModal extends Modal {
     this.viewportTarget = null;
     this.viewportHandler = null;
     this.modalEl.style.removeProperty("--folder-summary-chat-vh");
+    this.modalEl.style.removeProperty("--folder-summary-chat-keyboard-inset");
     this.modalEl.removeClass("folder-summary-chat-modal");
     this.modalEl.removeClass("folder-summary-chat-modal--glass");
     this.modalEl.removeClass("folder-summary-chat-modal--quiet");
     this.contentEl.removeClass("folder-summary-chat--glass");
     this.contentEl.removeClass("folder-summary-chat--quiet");
+    this.contentEl.removeClass("folder-summary-chat--keyboard-open");
     this.contentEl.empty();
   }
 

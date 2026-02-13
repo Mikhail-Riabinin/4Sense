@@ -40,6 +40,7 @@
   --chat-user-bubble: rgba(129, 221, 151, 0.14);
   --chat-assistant-bubble: rgba(95, 176, 255, 0.1);
   --chat-border-soft: rgba(125, 143, 162, 0.22);
+  --folder-summary-chat-keyboard-inset: 0px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -749,6 +750,10 @@
     gap: 10px;
     border-radius: 14px;
     padding: 6px;
+    padding-bottom: calc(
+      6px + env(safe-area-inset-bottom) + var(--folder-summary-chat-keyboard-inset, 0px)
+    );
+    transition: padding-bottom 0.16s ease;
   }
 
   .folder-summary-chat__title {
@@ -757,6 +762,10 @@
 
   .folder-summary-chat__output {
     min-height: 120px;
+  }
+
+  .folder-summary-chat--keyboard-open .folder-summary-chat__output {
+    min-height: 0;
   }
 
   .folder-summary-chat__message {
